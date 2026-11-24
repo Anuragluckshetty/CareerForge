@@ -1,307 +1,250 @@
 # CareerForge
 
-CareerForge is a full-stack placement-preparation platform that combines
-specialized AI coaching, resume analysis, preparation tracking, and a
-professional responsive interface.
+CareerForge is an AI-assisted interview preparation and resume coaching
+application. It combines a React web client with a FastAPI backend, PostgreSQL,
+LangGraph, and Groq.
 
-The running application is available at:
+## Contents
 
-- Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:8000`
-- Interactive API documentation: `http://localhost:8000/docs`
+- [Features](#features)
+- [Technology](#technology)
+- [Architecture](#architecture)
+- [Getting started](#getting-started)
+- [Local development](#local-development)
+- [Configuration](#configuration)
+- [Routes and API](#routes-and-api)
+- [Testing](#testing)
+- [Security and privacy](#security-and-privacy)
+- [Contributing](#contributing)
+- [Known limitations](#known-limitations)
+- [License](#license)
 
 ## Features
 
-- **AI practice coach:** Sends requests to Groq through FastAPI and routes DSA,
-  SQL, technical, and HR questions to specialized LangGraph agent nodes.
-- **DSA practice:** Generates algorithm questions, examples, constraints,
-  hints, starter code, and solutions.
-- **SQL practice:** Handles SQL concepts, joins, CTEs, aggregations, and query
-  optimization.
-- **Technical interviews:** Supports Python, Java, OOP, DBMS, operating systems,
-  networks, and system-design prompts.
-- **HR interviews:** Uses structured behavioral interview coaching and the STAR
-  method.
-- **Resume upload:** Accepts PDF, DOCX, and TXT files and extracts readable
-  resume text.
-- **Resume analysis:** Sends the resume and a focused question to Groq for
-  prioritized, actionable suggestions.
-- **Resume generation:** Tailors a structured resume to a target role, shows a
-  preview, and provides editable compilable LaTeX with `.tex` and PDF downloads.
-  Generated sections use the candidate's source details; unsupported credentials
-  or achievements are not intentionally filled in.
-- **Formatted answers:** AI Markdown is rendered with headings, lists, tables,
-  code blocks, and readable spacing.
-- **Profile settings:** Stores name, language, skill level, target role,
-  interests, and goals.
-- **Preparation progress:** Tracks attempts, streaks, completed sessions, and
-  profile completion in the browser.
-- **Professional UI:** Responsive full-width blue recruitment theme with dark
-  mode support.
-- **Separate protected pages:** Overview, Practice, Mock Interviews, Resume
-  Review, and Progress are available at their own client-side routes.
-- **Account authentication:** Login and registration use the FastAPI JWT
-  endpoints. A stored token is checked on refresh, and logged-out users are
-  redirected to login.
+- AI coaching for DSA, SQL, technical interviews, and behavioral/HR practice.
+- Separate protected pages for Overview, Practice, Mock Interviews, Resume
+  Review, and Progress.
+- Account registration, login, JWT session restoration, profile editing, and
+  logout.
+- PDF, DOCX, and TXT resume upload and text extraction.
+- Resume feedback tailored to a target role.
+- Improved resume generation with a preview, editable LaTeX source, `.tex`
+  download, and PDF export.
+- Markdown-formatted AI responses, browser-based practice history, and progress
+  tracking.
+- Responsive blue CareerForge theme with dark appearance support.
 
-## How the project works
+## Technology
 
-### Practice request flow
+| Area | Technologies |
+|---|---|
+| Frontend | React 18, Vite, React Router, React Markdown |
+| Backend | Python 3.12, FastAPI, Pydantic, SQLAlchemy |
+| AI | Groq, LangChain, LangGraph |
+| Database | PostgreSQL |
+| Deployment | Docker Compose, Nginx |
 
-```text
-User enters a prompt in React
-        |
-        v
-POST /api/v1/practice/ask
-        |
-        v
-FastAPI validates and forwards the request
-        |
-        v
-LangGraph supervisor analyzes keywords
-        |
-        +--> DSA agent
-        +--> SQL agent
-        +--> Technical agent
-        +--> HR agent
-        |
-        v
-Selected agent creates a focused Groq prompt
-        |
-        v
-Groq generates the answer
-        |
-        v
-FastAPI returns { agent, response }
-        |
-        v
-React renders Markdown and stores chat/progress locally
+## Architecture
+
+```mermaid
+flowchart LR
+    User --> React
+    React -->|HTTP API| Nginx
+    Nginx --> FastAPI
+    FastAPI -->|practice requests| LangGraph
+    LangGraph --> Groq
+    FastAPI -->|resume and assistant requests| Groq
+    FastAPI --> PostgreSQL
+    React -->|local profile, chat, resume, progress| BrowserStorage
 ```
 
-The supervisor routes SQL/database requests to the SQL agent, HR/behavioral
-requests to the HR agent, programming/computer-science requests to the technical
-agent, and remaining preparation requests to the DSA agent.
+The LangGraph supervisor routes practice prompts to DSA, SQL, technical, or HR
+agents. Resume analysis and generation use the configured Groq model directly.
+PostgreSQL stores user accounts and profiles; browser storage keeps practice
+activity, chat history, theme, and resume text on the current device.
 
-### Resume request flow
+## Getting started
 
-```text
-Upload PDF, DOCX, or TXT
-        |
-        v
-POST /api/v1/assistant/resume/upload
-        |
-        v
-Backend validates size and file type
-        |
-        v
-PyPDF or python-docx extracts text
-        |
-        v
-User asks a resume-specific question
-        |
-        v
-POST /api/v1/assistant/resume/chat
-        |
-        v
-Groq receives the resume text and question
-        |
-        v
-React renders prioritized Markdown suggestions
+### Prerequisites
+
+- Docker Desktop with Docker Compose v2.
+- A Groq API key for AI coaching and resume features.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Anuragluckshetty/GEN-AI-PROJECT.git
+cd GEN-AI-PROJECT
 ```
 
-TXT is decoded as UTF-8. PDF text is extracted from pages with PyPDF. DOCX text
-is extracted from document paragraphs. The upload limit is controlled by
-`MAX_UPLOAD_SIZE_MB`.
+### 2. Configure the environment
 
-### Resume generation flow
-
-```text
-Resume text + target job role
-        |
-        v
-POST /api/v1/assistant/resume/generate
-        |
-        v
-Groq returns validated structured resume fields
-        |
-        +--> React renders a resume preview and downloadable PDF
-        |
-        +--> Backend creates escaped, compilable LaTeX from those same fields
-                    |
-                    +--> Editable source, copy, and .tex download
-```
-
-The generated sections are omitted when the source has no matching information.
-Review the result for accuracy before using it; generated content should not be
-treated as verification of qualifications.
-
-### Frontend state
-
-The React frontend stores profile details, theme choice, resume text, chat
-history, and practice progress in `localStorage`, so they remain available in
-the current browser after a refresh. User credentials and profile records are
-handled by the backend and PostgreSQL.
-
-### Routes and authentication
-
-| Route | Page | Authentication |
-|---|---|---|
-| `/login` | Sign in | Public |
-| `/register` | Create an account | Public |
-| `/overview` | Dashboard overview | Protected |
-| `/practice` | Practice tracks and coach | Protected |
-| `/mock-interviews` | Mock interview activities | Protected |
-| `/resume-review` | Resume upload and analysis | Protected |
-| `/progress` | Preparation progress | Protected |
-
-The shared sidebar and header remain mounted across all five protected pages.
-The frontend stores the JWT returned by `/api/v1/auth/login` or
-`/api/v1/auth/register`, validates it on page load with `/api/v1/auth/me`, and
-removes it on logout. Password hashing and token signing are handled by the
-backend authentication service.
-
-## Repository layout
-
-```text
-backend/
-  app/
-    api/                 Health, auth, practice, agents, and assistant routes
-    agents/              Specialized agent package
-    config/              Application settings
-    database/            SQLAlchemy engine and session management
-    graph/               LangGraph state and supervisor
-    models/              SQLAlchemy user and profile models
-    rag/                 Retrieval package reserved for document RAG
-    schemas/             Pydantic request and response models
-    services/             Groq and authentication services
-    main.py              FastAPI application entry point
-frontend/                Vite React client
-docs/                    Architecture and API documentation
-docker-compose.yml       Frontend, backend, and PostgreSQL services
-```
-
-## Configuration
-
-Create `backend/.env` from the example:
+Create the backend environment file:
 
 ```powershell
 Copy-Item backend/.env.example backend/.env
 ```
 
-Set at least:
+On macOS or Linux:
 
-```dotenv
-GROQ_API_KEY=your-real-groq-api-key
-GROQ_MODEL=openai/gpt-oss-20b
-JWT_SECRET_KEY=a-long-random-production-secret
-BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-MAX_UPLOAD_SIZE_MB=10
+```bash
+cp backend/.env.example backend/.env
 ```
 
-Keep API keys only in backend environment files or deployment secrets. Never
-place provider credentials in `VITE_*` variables or commit them to Git.
+Edit `backend/.env` and set `GROQ_API_KEY`. For Docker Compose, also create a
+`.env` file beside `docker-compose.yml` and set a strong JWT signing secret:
 
-## Run with Docker
+```dotenv
+JWT_SECRET_KEY=replace-with-a-long-random-secret
+```
 
-From the repository root:
+The root `.env` supplies Compose-level settings. Do not commit either `.env`
+file.
 
-```powershell
+### 3. Start the application
+
+```bash
 docker compose up --build -d
 docker compose ps
 ```
 
-The frontend and backend use Nginx as the browser-facing reverse proxy:
+Open:
 
-- `http://localhost:5173/` serves the React application.
-- Requests beginning with `/api/` are proxied to the FastAPI container.
-- `http://localhost:5173/health` is proxied to the backend health endpoint.
+- Frontend: <http://localhost:5173>
+- Backend API: <http://localhost:8000>
+- Interactive API documentation: <http://localhost:8000/docs>
+- Health check: <http://localhost:8000/health>
 
-Stop the application:
+Stop the services with `docker compose down`. To also delete the local
+PostgreSQL data volume, use `docker compose down -v`.
 
-```powershell
-docker compose down
+## Local development
+
+Docker Compose can start PostgreSQL while the frontend and backend run directly
+on the host:
+
+```bash
+docker compose up -d postgres
 ```
 
-To remove PostgreSQL data as well:
+### Backend
+
+The backend reads `.env` from its current working directory.
 
 ```powershell
-docker compose down -v
+Set-Location backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
 ```
 
-## Run locally without Docker
+### Frontend
 
-Backend:
-
-```powershell
-python -m venv backend/.venv
-backend/.venv/Scripts/Activate.ps1
-python -m pip install -r backend/requirements.txt
-python -m uvicorn app.main:app --app-dir backend --reload
-```
-
-Frontend in a second terminal:
+In a second terminal:
 
 ```powershell
-cd frontend
-npm install
+Set-Location frontend
+npm ci
+$env:VITE_API_URL = "http://localhost:8000"
 npm run dev
 ```
 
-The local frontend runs on Vite's port, usually `5173`, and `VITE_API_URL`
-can be set to a remote backend if needed.
+The default backend CORS configuration allows the Vite development origin at
+`http://localhost:5173`.
 
-## Test
+## Configuration
 
-Backend:
+| Variable | Purpose |
+|---|---|
+| `GROQ_API_KEY` | Groq credential for AI features; required to generate AI responses. |
+| `GROQ_MODEL` | Groq model name; defaults to `openai/gpt-oss-20b`. |
+| `DATABASE_URL` | SQLAlchemy database connection string. |
+| `JWT_SECRET_KEY` | Secret used to sign access tokens; set a strong value outside development. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT lifetime in minutes; defaults to `60`. |
+| `BACKEND_CORS_ORIGINS` | Comma-separated allowed browser origins. |
+| `MAX_UPLOAD_SIZE_MB` | Maximum resume upload size; defaults to `10`. |
+| `VITE_API_URL` | Optional frontend API base URL; set for local or remote backend development. |
 
-```powershell
-python -m pytest backend/tests -q
-```
+See [`backend/.env.example`](./backend/.env.example) for the backend template.
 
-Frontend production build:
+## Routes and API
 
-```powershell
-cd frontend
-npm run build
-```
+| Route | Description | Access |
+|---|---|---|
+| `/login` | Sign in | Public |
+| `/register` | Create an account | Public |
+| `/overview` | Dashboard | Protected |
+| `/practice` | Practice tracks and AI coach | Protected |
+| `/mock-interviews` | Mock interview activities | Protected |
+| `/resume-review` | Resume review and generation | Protected |
+| `/progress` | Preparation progress | Protected |
 
-## Main API endpoints
+The API is versioned under `/api/v1`.
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | `/health` | Backend readiness |
-| GET | `/api/v1/agents` | Available specialist agents |
-| POST | `/api/v1/practice/ask` | Routed practice chat |
-| POST | `/api/v1/assistant/chat` | General assistant chat |
-| POST | `/api/v1/assistant/resume/upload` | Extract uploaded resume text |
-| POST | `/api/v1/assistant/resume/chat` | Ask resume-specific questions |
-| POST | `/api/v1/assistant/resume/generate` | Generate a resume preview and LaTeX source |
-| POST | `/api/v1/auth/register` | Create a user |
-| POST | `/api/v1/auth/login` | Obtain an access token |
-| GET | `/api/v1/auth/me` | Return the authenticated user |
-| PUT | `/api/v1/auth/profile` | Update the authenticated profile |
+| `GET` | `/health` | Health check |
+| `GET` | `/api/v1/agents` | List available agents |
+| `POST` | `/api/v1/practice/ask` | Submit a routed practice prompt |
+| `POST` | `/api/v1/assistant/chat` | General assistant chat |
+| `POST` | `/api/v1/assistant/resume/upload` | Extract text from an uploaded resume |
+| `POST` | `/api/v1/assistant/resume/chat` | Ask for resume feedback |
+| `POST` | `/api/v1/assistant/resume/generate` | Generate structured resume content and LaTeX |
+| `POST` | `/api/v1/auth/register` | Register a user |
+| `POST` | `/api/v1/auth/login` | Authenticate and obtain a JWT |
+| `GET` | `/api/v1/auth/me` | Get the authenticated user |
+| `PUT` | `/api/v1/auth/profile` | Update the authenticated profile |
 
-## Deployment notes
+The full interactive API reference is available at `/docs` when the backend is
+running.
 
-- Use a real PostgreSQL database and strong JWT secret in hosted deployments.
-- Set the Groq key in the backend environment only.
-- Configure CORS for the exact hosted frontend origin.
-- Serve the frontend build through Nginx or a static host.
-- The current browser activity uses local storage; move this state to PostgreSQL
-  when multi-device accounts and server-side history are required.
-- The RAG package is prepared as an architecture boundary but does not yet
-  provide embedded-document retrieval.
+## Testing
 
-## Roadmap
+Run the backend tests from the repository root:
 
-1. Project setup and architecture
-2. Backend foundation and Groq integration
-3. DSA and SQL agents
-4. Technical and HR interview agents
-5. LangGraph supervisor and routing
-6. Document RAG assistant
-7. Resume analyzer
-8. PostgreSQL persistence and personalization
-9. React frontend
-10. Integration, testing, and deployment
+```bash
+python -m pytest backend/tests -q
+```
 
+Build the frontend:
+
+```bash
+cd frontend
+npm ci
+npm run build
+```
+
+## Security and privacy
+
+- Never commit API keys, passwords, production database credentials, or `.env`
+  files. Keep secrets in local environment files or deployment secret stores.
+- Passwords are hashed by the backend; authentication uses signed JWT access
+  tokens.
+- Resume text is sent to the configured Groq service when AI resume features
+  are used. Resume text and practice activity are also stored in browser
+  storage on the current device.
+- Do not upload sensitive personal information unless you are comfortable
+  sending it to the configured AI provider.
+
+## Contributing
+
+Contributions are welcome. Before opening a pull request:
+
+1. Create a focused branch from `main`.
+2. Keep changes scoped and update relevant documentation.
+3. Run the backend tests and frontend production build.
+4. Describe the change and include reproduction or validation steps.
+
+## Known limitations
+
+- Practice history, chat history, theme, and resume text use browser storage;
+  they do not sync across devices.
+- The `backend/app/rag` package is a placeholder. Embedded-document retrieval
+  is not currently implemented.
+
+## License
+
+This repository does not currently include a license file. If you intend to
+distribute CareerForge as open-source software, add a license that reflects
+your intended reuse and distribution terms.
